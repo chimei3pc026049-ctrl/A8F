@@ -294,7 +294,7 @@
 
     .occupant-grid {
       display: none;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 14px;
       margin-top: 26px;
     }
@@ -788,13 +788,18 @@
         <div id="occupantGrid" class="occupant-grid">
 
           <div class="info-card">
+            <div class="info-label">科別</div>
+            <div id="currentDepartment" class="info-value">－</div>
+          </div>
+
+          <div class="info-card">
             <div class="info-label">目前使用人</div>
             <div id="currentName" class="info-value">－</div>
           </div>
 
           <div class="info-card">
-            <div class="info-label">傳呼號碼</div>
-            <div id="currentPager" class="info-value">－</div>
+            <div class="info-label">院內簡碼</div>
+            <div id="currentExtension" class="info-value">－</div>
           </div>
 
           <div class="info-card">
@@ -874,7 +879,7 @@
         <div>
           <h2 id="borrowTitle" class="modal-title">借用值班室</h2>
           <p class="modal-subtitle">
-            請填寫借用資料。完成登記後，主畫面會立即顯示目前使用人的姓名及傳呼號碼。
+            請填寫借用資料。完成登記後，主畫面會立即顯示科別、姓名及院內簡碼。
           </p>
         </div>
 
@@ -890,16 +895,16 @@
 
 
       <div class="field">
-        <label for="employeeId">
-          人事號 <span class="required">*</span>
+        <label for="department">
+          科別 <span class="required">*</span>
         </label>
 
         <input
-          id="employeeId"
+          id="department"
           type="text"
-          maxlength="30"
-          autocomplete="off"
-          placeholder="請輸入人事號"
+          maxlength="40"
+          autocomplete="organization"
+          placeholder="請輸入科別，例如：急診醫學科"
         />
       </div>
 
@@ -920,17 +925,16 @@
 
 
       <div class="field">
-        <label for="pager">
-          傳呼號碼 <span class="required">*</span>
+        <label for="extension">
+          院內簡碼 <span class="required">*</span>
         </label>
 
         <input
-          id="pager"
+          id="extension"
           type="text"
-          maxlength="30"
-          inputmode="numeric"
+          maxlength="20"
           autocomplete="off"
-          placeholder="請輸入傳呼號碼"
+          placeholder="請輸入院內簡碼"
         />
       </div>
 
@@ -969,7 +973,7 @@
         <div>
           <h2 id="returnTitle" class="modal-title">辦理歸還</h2>
           <p class="modal-subtitle">
-            僅需輸入目前借用人的人事號。英文字母不分大小寫，比對成功後即可完成歸還。
+            僅需輸入目前借用人的院內簡碼。英文字母不分大小寫，比對成功後即可完成歸還。
           </p>
         </div>
 
@@ -985,16 +989,16 @@
 
 
       <div class="field">
-        <label for="returnEmployeeId">
-          人事號 <span class="required">*</span>
+        <label for="returnExtension">
+          院內簡碼 <span class="required">*</span>
         </label>
 
         <input
-          id="returnEmployeeId"
+          id="returnExtension"
           type="text"
-          maxlength="30"
+          maxlength="20"
           autocomplete="off"
-          placeholder="請輸入人事號"
+          placeholder="請輸入院內簡碼"
         />
       </div>
 
@@ -1045,7 +1049,7 @@
      */
 
     const API_URL =
-      "https://script.google.com/macros/s/AKfycbxoMuF5x_N9R-aPpHk2RQWRCl4p7DZEAaeTaTb_in9W-yVlCZYi5a5W2Rt833kfBgmZFg/exec";
+      "https://script.google.com/macros/s/請貼上你的部署ID/exec";
 
 
     /*
@@ -1343,11 +1347,14 @@
         "目前值班室已有使用者，請待歸還後再進行下一次借用。";
 
 
+      document.getElementById("currentDepartment").textContent =
+        status.department || "－";
+
       document.getElementById("currentName").textContent =
         status.name || "－";
 
-      document.getElementById("currentPager").textContent =
-        status.pager || "－";
+      document.getElementById("currentExtension").textContent =
+        status.extension || "－";
 
       document.getElementById("borrowTime").textContent =
         status.borrowTime || "－";
@@ -1477,7 +1484,7 @@
       setTimeout(
         function () {
           document
-            .getElementById("employeeId")
+            .getElementById("department")
             .focus();
         },
         100
@@ -1488,9 +1495,9 @@
 
     async function submitBorrow() {
 
-      const employeeId =
+      const department =
         document
-          .getElementById("employeeId")
+          .getElementById("department")
           .value
           .trim();
 
@@ -1502,22 +1509,22 @@
           .trim();
 
 
-      const pager =
+      const extension =
         document
-          .getElementById("pager")
+          .getElementById("extension")
           .value
           .trim();
 
 
-      if (!employeeId) {
+      if (!department) {
 
         showToast(
-          "請輸入人事號。",
+          "請輸入科別。",
           "error"
         );
 
         document
-          .getElementById("employeeId")
+          .getElementById("department")
           .focus();
 
         return;
@@ -1539,15 +1546,15 @@
       }
 
 
-      if (!pager) {
+      if (!extension) {
 
         showToast(
-          "請輸入傳呼號碼。",
+          "請輸入院內簡碼。",
           "error"
         );
 
         document
-          .getElementById("pager")
+          .getElementById("extension")
           .focus();
 
         return;
@@ -1555,11 +1562,11 @@
 
 
       if (
-        !/^[A-Za-z0-9_-]+$/.test(employeeId)
+        !/^[A-Za-z0-9_-]+$/.test(extension)
       ) {
 
         showToast(
-          "人事號格式不正確。",
+          "院內簡碼格式不正確，請使用英文字母、數字、底線或連字號。",
           "error"
         );
 
@@ -1584,8 +1591,8 @@
         );
 
         form.append(
-          "employeeId",
-          employeeId
+          "department",
+          department
         );
 
         form.append(
@@ -1594,8 +1601,8 @@
         );
 
         form.append(
-          "pager",
-          pager
+          "extension",
+          extension
         );
 
 
@@ -1678,7 +1685,7 @@
       setTimeout(
         function () {
           document
-            .getElementById("returnEmployeeId")
+            .getElementById("returnExtension")
             .focus();
         },
         100
@@ -1689,22 +1696,22 @@
 
     async function submitReturn() {
 
-      const employeeId =
+      const extension =
         document
-          .getElementById("returnEmployeeId")
+          .getElementById("returnExtension")
           .value
           .trim();
 
 
-      if (!employeeId) {
+      if (!extension) {
 
         showToast(
-          "請輸入人事號。",
+          "請輸入院內簡碼。",
           "error"
         );
 
         document
-          .getElementById("returnEmployeeId")
+          .getElementById("returnExtension")
           .focus();
 
         return;
@@ -1728,8 +1735,8 @@
         );
 
         form.append(
-          "employeeId",
-          employeeId
+          "extension",
+          extension
         );
 
 
@@ -1750,7 +1757,7 @@
 
 
         document
-          .getElementById("returnEmployeeId")
+          .getElementById("returnExtension")
           .value = "";
 
 
@@ -1816,7 +1823,7 @@
     function clearBorrowForm() {
 
       document
-        .getElementById("employeeId")
+        .getElementById("department")
         .value = "";
 
       document
@@ -1824,7 +1831,7 @@
         .value = "";
 
       document
-        .getElementById("pager")
+        .getElementById("extension")
         .value = "";
 
     }
