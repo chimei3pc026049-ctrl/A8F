@@ -1154,222 +1154,114 @@
      * ============================================================
      * 查詢目前狀態
      *
-     * 使用 JSONP，避免 GitHub Pages 與 Apps Script 跨網域問題。
-     * Apps Script doGet 需支援：
-     *
-     * ?action=status&callback=xxx
+     * 使用 fetch 呼叫 Apps Script Web App。
+     * 已加入 Android Chrome 相容設定、禁止快取及逾時控制。
      * ============================================================
      */
 
     /**
-     * 以 JSONP 呼叫 Apps Script API。
-     *
-     * GitHub Pages 與 Apps Script 位於不同網域，
-     * 使用 JSONP 可在手機 Chrome、Safari 與桌面瀏覽器
-     * 取得後端實際執行結果。
+     * 以 fetch 呼叫 Apps Script API。
      */
-    function callApi(
+    async function callApi(
       action,
       parameters,
       timeoutMs
     ) {
 
-      const params =
-        parameters || {};
+      const params = parameters || {};
+      const timeout = timeoutMs || 30000;
 
-      const timeout =
-        timeoutMs || 30000;
+      const url = new URL(API_URL);
 
+      url.searchParams.set("action", action);
 
-      return new Promise(
-        function (
-          resolve,
-          reject
-        ) {
+      Object.keys(params).forEach(function (key) {
+        const value = params[key];
 
-          const callbackName =
-            "dutyRoomApiCallback_" +
-            Date.now() +
-            "_" +
-            Math.floor(
-              Math.random() *
-              1000000
-            );
-
-
-          const script =
-            document.createElement(
-              "script"
-            );
-
-
-          let completed =
-            false;
-
-
-          const timer =
-            setTimeout(
-              function () {
-
-                if (completed) {
-                  return;
-                }
-
-                completed =
-                  true;
-
-                cleanupJsonp(
-                  callbackName,
-                  script
-                );
-
-                reject(
-                  new Error(
-                    "系統連線逾時，請確認網路後再試一次。"
-                  )
-                );
-
-              },
-              timeout
-            );
-
-
-          window[callbackName] =
-            function (
-              result
-            ) {
-
-              if (completed) {
-                return;
-              }
-
-              completed =
-                true;
-
-              clearTimeout(
-                timer
-              );
-
-              cleanupJsonp(
-                callbackName,
-                script
-              );
-
-              resolve(
-                result
-              );
-
-            };
-
-
-          const query =
-            new URLSearchParams();
-
-
-          query.set(
-            "action",
-            action
-          );
-
-
-          Object.keys(
-            params
-          )
-            .forEach(
-              function (
-                key
-              ) {
-
-                const value =
-                  params[key];
-
-                if (
-                  value !==
-                  undefined &&
-                  value !==
-                  null
-                ) {
-
-                  query.set(
-                    key,
-                    String(
-                      value
-                    )
-                  );
-
-                }
-
-              }
-            );
-
-
-          query.set(
-            "callback",
-            callbackName
-          );
-
-
-          /*
-           * 避免手機 Chrome 或 GitHub Pages 使用舊快取。
-           */
-          query.set(
-            "_",
-            Date.now() +
-            "_" +
-            Math.floor(
-              Math.random() *
-              1000000
-            )
-          );
-
-
-          script.src =
-            API_URL +
-            "?" +
-            query.toString();
-
-
-          script.async =
-            true;
-
-
-          script.onerror =
-            function () {
-
-              if (completed) {
-                return;
-              }
-
-              completed =
-                true;
-
-              clearTimeout(
-                timer
-              );
-
-              cleanupJsonp(
-                callbackName,
-                script
-              );
-
-              reject(
-                new Error(
-                  "無法載入 Apps Script API。請重新整理頁面後再試。"
-                )
-              );
-
-            };
-
-
-          document.body.appendChild(
-            script
-          );
-
+        if (value !== undefined && value !== null) {
+          url.searchParams.set(key, String(value));
         }
+      });
+
+      /*
+       * 避免 Android Chrome、GitHub Pages 或代理快取舊資料。
+       */
+      url.searchParams.set(
+        "_t",
+        Date.now() + "_" + Math.floor(Math.random() * 1000000)
       );
 
-    }
+      const controller = new AbortController();
 
+      const timer = setTimeout(function () {
+        controller.abort();
+      }, timeout);
+
+      try {
+
+        const response = await fetch(url.toString(), {
+          method: "GET",
+          mode: "cors",
+          redirect: "follow",
+          cache: "no-store",
+          credentials: "omit",
+          signal: controller.signal,
+          headers: {
+            "Accept": "application/json,text/plain,*/*"
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            "Apps Script API 回應錯誤：HTTP " + response.status
+          );
+        }
+
+        const responseText = await response.text();
+
+        if (!responseText) {
+          throw new Error("Apps Script API 未回傳資料。");
+        }
+
+        try {
+          return JSON.parse(responseText);
+        } catch (parseError) {
+          throw new Error(
+            "Apps Script API 回傳格式不是有效 JSON：" +
+            responseText.substring(0, 120)
+          );
+        }
+
+      } catch (error) {
+
+        if (error && error.name === "AbortError") {
+          throw new Error(
+            "系統連線逾時，請確認網路後再試一次。"
+          );
+        }
+
+        if (
+          error &&
+          (
+            error.message === "Failed to fetch" ||
+            error.message === "Load failed" ||
+            error.message === "NetworkError when attempting to fetch resource."
+          )
+        ) {
+          throw new Error(
+            "無法連線至 Apps Script API。請確認 Web App 已設為所有人可存取，並重新整理頁面後再試。"
+          );
+        }
+
+        throw error;
+
+      } finally {
+
+        clearTimeout(timer);
+
+      }
+
+    }
 
     async function refreshStatus(
       manual
@@ -1493,41 +1385,6 @@
     }
 
 
-    function cleanupJsonp(
-      callbackName,
-      script
-    ) {
-
-      try {
-
-        delete window[
-          callbackName
-        ];
-
-      } catch (error) {
-
-        window[
-          callbackName
-        ] =
-          undefined;
-
-      }
-
-
-      if (
-        script &&
-        script.parentNode
-      ) {
-
-        script
-          .parentNode
-          .removeChild(
-            script
-          );
-
-      }
-
-    }
 
 
     /*
