@@ -1114,7 +1114,7 @@
      */
 
     const API_URL =
-      "https://script.google.com/macros/s/AKfycbxoMuF5x_N9R-aPpHk2RQWRCl4p7DZEAaeTaTb_in9W-yVlCZYi5a5W2Rt833kfBgmZFg/exec";
+      "https://script.google.com/macros/s/AKfycbzkFNtfSxqn3hA-FFFv6P9baRCeLDS0vfaPhlgFXGTmXEkFFaElGO0X1wM8Cjoz4g-hBA/exec";
 
 
     /*
@@ -1161,165 +1161,334 @@
      * ============================================================
      */
 
-    function refreshStatus(manual) {
+    /**
+     * 以 JSONP 呼叫 Apps Script API。
+     *
+     * GitHub Pages 與 Apps Script 位於不同網域，
+     * 使用 JSONP 可在手機 Chrome、Safari 與桌面瀏覽器
+     * 取得後端實際執行結果。
+     */
+    function callApi(
+      action,
+      parameters,
+      timeoutMs
+    ) {
+
+      const params =
+        parameters || {};
+
+      const timeout =
+        timeoutMs || 30000;
+
+
+      return new Promise(
+        function (
+          resolve,
+          reject
+        ) {
+
+          const callbackName =
+            "dutyRoomApiCallback_" +
+            Date.now() +
+            "_" +
+            Math.floor(
+              Math.random() *
+              1000000
+            );
+
+
+          const script =
+            document.createElement(
+              "script"
+            );
+
+
+          let completed =
+            false;
+
+
+          const timer =
+            setTimeout(
+              function () {
+
+                if (completed) {
+                  return;
+                }
+
+                completed =
+                  true;
+
+                cleanupJsonp(
+                  callbackName,
+                  script
+                );
+
+                reject(
+                  new Error(
+                    "系統連線逾時，請確認網路後再試一次。"
+                  )
+                );
+
+              },
+              timeout
+            );
+
+
+          window[callbackName] =
+            function (
+              result
+            ) {
+
+              if (completed) {
+                return;
+              }
+
+              completed =
+                true;
+
+              clearTimeout(
+                timer
+              );
+
+              cleanupJsonp(
+                callbackName,
+                script
+              );
+
+              resolve(
+                result
+              );
+
+            };
+
+
+          const query =
+            new URLSearchParams();
+
+
+          query.set(
+            "action",
+            action
+          );
+
+
+          Object.keys(
+            params
+          )
+            .forEach(
+              function (
+                key
+              ) {
+
+                const value =
+                  params[key];
+
+                if (
+                  value !==
+                  undefined &&
+                  value !==
+                  null
+                ) {
+
+                  query.set(
+                    key,
+                    String(
+                      value
+                    )
+                  );
+
+                }
+
+              }
+            );
+
+
+          query.set(
+            "callback",
+            callbackName
+          );
+
+
+          /*
+           * 避免手機 Chrome 或 GitHub Pages 使用舊快取。
+           */
+          query.set(
+            "_",
+            Date.now() +
+            "_" +
+            Math.floor(
+              Math.random() *
+              1000000
+            )
+          );
+
+
+          script.src =
+            API_URL +
+            "?" +
+            query.toString();
+
+
+          script.async =
+            true;
+
+
+          script.onerror =
+            function () {
+
+              if (completed) {
+                return;
+              }
+
+              completed =
+                true;
+
+              clearTimeout(
+                timer
+              );
+
+              cleanupJsonp(
+                callbackName,
+                script
+              );
+
+              reject(
+                new Error(
+                  "無法載入 Apps Script API。請重新整理頁面後再試。"
+                )
+              );
+
+            };
+
+
+          document.body.appendChild(
+            script
+          );
+
+        }
+      );
+
+    }
+
+
+    async function refreshStatus(
+      manual
+    ) {
 
       const requestId =
         ++statusRequestToken;
 
-      const refreshButton =
-        document.getElementById("refreshButton");
 
-      refreshButton.classList.add("spinning");
+      const refreshButton =
+        document.getElementById(
+          "refreshButton"
+        );
+
+
+      refreshButton
+        .classList
+        .add(
+          "spinning"
+        );
+
 
       if (manual) {
-        showLoading("正在更新目前使用狀態...");
+
+        showLoading(
+          "正在更新目前使用狀態..."
+        );
+
       }
+
 
       hideSystemError();
 
 
-      const callbackName =
-        "dutyRoomStatusCallback_" +
-        Date.now() +
-        "_" +
-        Math.floor(Math.random() * 100000);
+      try {
+
+        const result =
+          await callApi(
+            "status",
+            {},
+            30000
+          );
 
 
-      let finished = false;
+        if (
+          requestId !==
+          statusRequestToken
+        ) {
+
+          return;
+
+        }
 
 
-      const timeout =
-        setTimeout(
-          function () {
+        if (
+          !result ||
+          result.success !==
+          true
+        ) {
 
-            if (finished) {
-              return;
-            }
+          throw new Error(
+            result &&
+            result.message
+              ? result.message
+              : "讀取系統狀態失敗。"
+          );
 
-            finished = true;
+        }
 
-            cleanupJsonp(
-              callbackName,
-              script
-            );
 
-            refreshButton.classList.remove("spinning");
-
-            if (manual) {
-              hideLoading();
-            }
-
-            showSystemError(
-              "無法連線至值班室系統，請確認 Apps Script API 網址、部署權限或網路連線。"
-            );
-
-          },
-          12000
+        renderStatus(
+          result
         );
 
 
-      window[callbackName] =
-        function (result) {
+        if (manual) {
 
-          if (finished) {
-            return;
-          }
-
-          finished = true;
-
-          clearTimeout(timeout);
-
-          cleanupJsonp(
-            callbackName,
-            script
+          showToast(
+            "狀態已更新",
+            "success"
           );
 
-          refreshButton.classList.remove("spinning");
+        }
 
-          if (manual) {
-            hideLoading();
-          }
+      } catch (error) {
 
+        if (
+          requestId !==
+          statusRequestToken
+        ) {
 
-          if (requestId !== statusRequestToken) {
-            return;
-          }
+          return;
 
-
-          if (
-            !result ||
-            result.success === false
-          ) {
-
-            showSystemError(
-              result && result.message
-                ? result.message
-                : "讀取系統狀態失敗。"
-            );
-
-            return;
-          }
+        }
 
 
-          renderStatus(result);
+        showSystemError(
+          error &&
+          error.message
+            ? error.message
+            : "無法連線至值班室系統。"
+        );
 
+      } finally {
 
-          if (manual) {
-            showToast(
-              "狀態已更新",
-              "success"
-            );
-          }
-
-        };
-
-
-      const script =
-        document.createElement("script");
-
-
-      script.src =
-        API_URL +
-        "?action=status" +
-        "&callback=" +
-        encodeURIComponent(callbackName) +
-        "&t=" +
-        Date.now();
-
-
-      script.async = true;
-
-
-      script.onerror =
-        function () {
-
-          if (finished) {
-            return;
-          }
-
-          finished = true;
-
-          clearTimeout(timeout);
-
-          cleanupJsonp(
-            callbackName,
-            script
+        refreshButton
+          .classList
+          .remove(
+            "spinning"
           );
 
-          refreshButton.classList.remove("spinning");
 
-          if (manual) {
-            hideLoading();
-          }
+        if (manual) {
 
-          showSystemError(
-            "無法連線至 Apps Script API。請確認 API_URL 是否正確，且網址結尾為 /exec。"
-          );
+          hideLoading();
 
-        };
+        }
 
-
-      document.body.appendChild(script);
+      }
 
     }
 
@@ -1330,16 +1499,32 @@
     ) {
 
       try {
-        delete window[callbackName];
+
+        delete window[
+          callbackName
+        ];
+
       } catch (error) {
-        window[callbackName] = undefined;
+
+        window[
+          callbackName
+        ] =
+          undefined;
+
       }
+
 
       if (
         script &&
         script.parentNode
       ) {
-        script.parentNode.removeChild(script);
+
+        script
+          .parentNode
+          .removeChild(
+            script
+          );
+
       }
 
     }
@@ -1562,21 +1747,27 @@
 
       const department =
         document
-          .getElementById("department")
+          .getElementById(
+            "department"
+          )
           .value
           .trim();
 
 
       const name =
         document
-          .getElementById("name")
+          .getElementById(
+            "name"
+          )
           .value
           .trim();
 
 
       const extension =
         document
-          .getElementById("extension")
+          .getElementById(
+            "extension"
+          )
           .value
           .trim();
 
@@ -1589,10 +1780,13 @@
         );
 
         document
-          .getElementById("department")
+          .getElementById(
+            "department"
+          )
           .focus();
 
         return;
+
       }
 
 
@@ -1604,10 +1798,13 @@
         );
 
         document
-          .getElementById("name")
+          .getElementById(
+            "name"
+          )
           .focus();
 
         return;
+
       }
 
 
@@ -1619,15 +1816,21 @@
         );
 
         document
-          .getElementById("extension")
+          .getElementById(
+            "extension"
+          )
           .focus();
 
         return;
+
       }
 
 
       if (
-        !/^[A-Za-z0-9_-]+$/.test(extension)
+        !/^[A-Za-z0-9_-]+$/
+          .test(
+            extension
+          )
       ) {
 
         showToast(
@@ -1636,6 +1839,7 @@
         );
 
         return;
+
       }
 
 
@@ -1646,67 +1850,80 @@
 
       try {
 
-        const form =
-          new URLSearchParams();
+        const result =
+          await callApi(
+            "borrow",
+            {
+              department:
+                department,
+
+              name:
+                name,
+
+              extension:
+                extension,
+
+              confirm:
+                "1"
+            },
+            30000
+          );
 
 
-        form.append(
-          "action",
-          "borrow"
+        if (
+          !result ||
+          result.success !==
+          true
+        ) {
+
+          throw new Error(
+            result &&
+            result.message
+              ? result.message
+              : "借用登記失敗。"
+          );
+
+        }
+
+
+        closeModal(
+          "borrowModal"
         );
 
-        form.append(
-          "department",
-          department
-        );
-
-        form.append(
-          "name",
-          name
-        );
-
-        form.append(
-          "extension",
-          extension
-        );
-
-
-        await fetch(
-          API_URL,
-          {
-            method: "POST",
-            mode: "no-cors",
-            body: form
-          }
-        );
-
-
-        /*
-         * no-cors 模式無法直接讀取 Apps Script 回傳內容，
-         * 因此稍候後重新查詢狀態，以試算表實際結果為準。
-         */
-        await sleep(1500);
-
-
-        closeModal("borrowModal");
 
         clearBorrowForm();
 
+
+        if (
+          result.status
+        ) {
+
+          renderStatus(
+            result.status
+          );
+
+        } else {
+
+          await refreshStatus(
+            false
+          );
+
+        }
+
+
         showToast(
-          "借用資料已送出，正在同步狀態。",
+          result.message ||
+          "借用登記完成。",
           "success"
         );
-
-
-        await sleep(500);
-
-        refreshStatus(false);
-
 
       } catch (error) {
 
         showToast(
-          "借用資料送出失敗，請稍後再試。",
+          error &&
+          error.message
+            ? error.message
+            : "借用資料送出失敗，請稍後再試。",
           "error"
         );
 
@@ -1761,30 +1978,53 @@
 
       try {
 
-        const form =
-          new URLSearchParams();
+        const result =
+          await callApi(
+            "return",
+            {
+              confirm:
+                "1"
+            },
+            30000
+          );
 
 
-        form.append(
-          "action",
-          "return"
+        if (
+          !result ||
+          result.success !==
+          true
+        ) {
+
+          throw new Error(
+            result &&
+            result.message
+              ? result.message
+              : "歸還作業失敗。"
+          );
+
+        }
+
+
+        closeModal(
+          "returnModal"
         );
 
 
-        await fetch(
-          API_URL,
-          {
-            method: "POST",
-            mode: "no-cors",
-            body: form
-          }
-        );
+        if (
+          result.status
+        ) {
 
+          renderStatus(
+            result.status
+          );
 
-        await sleep(1500);
+        } else {
 
+          await refreshStatus(
+            false
+          );
 
-        closeModal("returnModal");
+        }
 
 
         showToast(
@@ -1792,16 +2032,13 @@
           "success"
         );
 
-
-        await sleep(500);
-
-        refreshStatus(false);
-
-
       } catch (error) {
 
         showToast(
-          "歸還資料送出失敗，請稍後再試。",
+          error &&
+          error.message
+            ? error.message
+            : "歸還資料送出失敗，請稍後再試。",
           "error"
         );
 
