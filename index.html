@@ -559,6 +559,66 @@
       margin-top: 24px;
     }
 
+    .return-reminder {
+      display: flex;
+      align-items: flex-start;
+      gap: 15px;
+      padding: 20px;
+      border: 1px solid #cce7dd;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #edf9f5, #f8fffc);
+    }
+
+    .return-reminder-icon {
+      width: 42px;
+      height: 42px;
+      flex: 0 0 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background: var(--green);
+      color: #fff;
+      font-size: 22px;
+      font-weight: 900;
+      box-shadow: 0 8px 20px rgba(25, 134, 109, 0.20);
+    }
+
+    .return-reminder-title {
+      margin-bottom: 7px;
+      color: var(--green);
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .return-reminder-text {
+      color: var(--text);
+      font-size: 17px;
+      line-height: 1.7;
+    }
+
+    .manager-extension {
+      display: inline-block;
+      margin-left: 7px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid #cde4dc;
+      color: #176b59;
+      font-size: 14px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .confirm-note {
+      margin-top: 15px;
+      padding: 13px 15px;
+      border-radius: 13px;
+      background: #f4f7f9;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.65;
+    }
+
     /* ---------- Loading ---------- */
 
     .loading-layer {
@@ -961,7 +1021,7 @@
   </div>
 
 
-  <!-- 歸還 Modal -->
+  <!-- 歸還確認 Modal -->
   <div
     id="returnModal"
     class="modal-overlay"
@@ -971,9 +1031,9 @@
 
       <div class="modal-header">
         <div>
-          <h2 id="returnTitle" class="modal-title">辦理歸還</h2>
+          <h2 id="returnTitle" class="modal-title">確認歸還值班室</h2>
           <p class="modal-subtitle">
-            僅需輸入目前借用人的院內簡碼。英文字母不分大小寫，比對成功後即可完成歸還。
+            請先確認值班室已整理完畢，並將感應卡交還管理人員。
           </p>
         </div>
 
@@ -988,18 +1048,23 @@
       </div>
 
 
-      <div class="field">
-        <label for="returnExtension">
-          院內簡碼 <span class="required">*</span>
-        </label>
+      <div class="return-reminder">
+        <div class="return-reminder-icon" aria-hidden="true">✓</div>
 
-        <input
-          id="returnExtension"
-          type="text"
-          maxlength="20"
-          autocomplete="off"
-          placeholder="請輸入院內簡碼"
-        />
+        <div>
+          <div class="return-reminder-title">感應卡歸還提醒</div>
+
+          <div class="return-reminder-text">
+            請將感應卡歸還管理人：
+            <strong>蔡雯斐</strong>
+            <span class="manager-extension">院內簡碼 8103</span>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="confirm-note">
+        按下「確認歸還」後，系統將直接結束目前借用紀錄。
       </div>
 
 
@@ -1009,7 +1074,7 @@
           type="button"
           onclick="closeModal('returnModal')"
         >
-          取消
+          尚未歸還
         </button>
 
         <button
@@ -1049,7 +1114,7 @@
      */
 
     const API_URL =
-      "https://script.google.com/macros/s/AKfycbxoMuF5x_N9R-aPpHk2RQWRCl4p7DZEAaeTaTb_in9W-yVlCZYi5a5W2Rt833kfBgmZFg/exec";
+      "https://script.google.com/macros/s/請貼上你的部署ID/exec";
 
 
     /*
@@ -1682,41 +1747,12 @@
         .add("show");
 
 
-      setTimeout(
-        function () {
-          document
-            .getElementById("returnExtension")
-            .focus();
-        },
-        100
-      );
+
 
     }
 
 
     async function submitReturn() {
-
-      const extension =
-        document
-          .getElementById("returnExtension")
-          .value
-          .trim();
-
-
-      if (!extension) {
-
-        showToast(
-          "請輸入院內簡碼。",
-          "error"
-        );
-
-        document
-          .getElementById("returnExtension")
-          .focus();
-
-        return;
-      }
-
 
       showLoading(
         "正在辦理歸還..."
@@ -1732,11 +1768,6 @@
         form.append(
           "action",
           "return"
-        );
-
-        form.append(
-          "extension",
-          extension
         );
 
 
@@ -1756,13 +1787,8 @@
         closeModal("returnModal");
 
 
-        document
-          .getElementById("returnExtension")
-          .value = "";
-
-
         showToast(
-          "歸還資料已送出，正在同步狀態。",
+          "歸還完成，請記得將感應卡交給蔡雯斐（簡碼 8103）。",
           "success"
         );
 
